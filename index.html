@@ -1,0 +1,192 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimalist Text Editor</title>
+    <!-- Load Tailwind CSS for clean, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        /* Hide scrollbar for a cleaner writing experience while maintaining scrollability */
+        textarea::-webkit-scrollbar {
+            width: 6px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.3);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-stone-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 min-h-screen flex flex-col transition-colors duration-200 selection:bg-zinc-200 dark:selection:bg-zinc-800">
+
+    <!-- Top Minimal Status & Action Bar -->
+    <header class="w-full max-w-3xl mx-auto px-6 pt-6 pb-2 flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500">
+        <!-- Subtle Auto-Save Indicator -->
+        <div class="flex items-center space-x-2">
+            <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500/70 transition-colors duration-300"></span>
+            <span id="status-text" class="tracking-wide">Saved</span>
+        </div>
+
+        <!-- Minimal Action Controls -->
+        <div class="flex items-center space-x-4">
+            <button 
+                id="download-btn" 
+                type="button"
+                class="hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors py-1 px-2 rounded-md cursor-pointer focus:outline-none"
+                title="Download as .txt">
+                Download
+            </button>
+            <button 
+                id="clear-btn" 
+                type="button"
+                class="hover:text-rose-500 dark:hover:text-rose-400 transition-colors py-1 px-2 rounded-md cursor-pointer focus:outline-none"
+                title="Clear document">
+                Clear
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Centered Writing Area -->
+    <main class="flex-1 w-full max-w-3xl mx-auto px-6 pb-12 pt-4 flex flex-col">
+        <textarea 
+            id="editor" 
+            class="w-full flex-1 bg-transparent resize-none border-none focus:outline-none text-base sm:text-lg leading-relaxed placeholder-zinc-300 dark:placeholder-zinc-700"
+            placeholder="Start typing..."
+            spellcheck="true"
+            autofocus></textarea>
+    </main>
+
+    <!-- Inline Custom Confirmation Toast (replaces browser alert/confirm) -->
+    <div id="confirm-bar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg rounded-xl px-4 py-2.5 flex items-center space-x-4 text-xs">
+        <span class="text-zinc-600 dark:text-zinc-300">Clear all text?</span>
+        <button id="confirm-yes" class="text-rose-600 dark:text-rose-400 font-medium hover:underline px-2 py-1 rounded cursor-pointer">Yes, clear</button>
+        <button id="confirm-no" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 px-2 py-1 rounded cursor-pointer">Cancel</button>
+    </div>
+
+    <script>
+        // Storage key for localStorage persistence
+        const STORAGE_KEY = 'minimal_editor_content_v1';
+
+        // DOM Elements
+        const editor = document.getElementById('editor');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+        const downloadBtn = document.getElementById('download-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const confirmBar = document.getElementById('confirm-bar');
+        const confirmYes = document.getElementById('confirm-yes');
+        const confirmNo = document.getElementById('confirm-no');
+
+        let saveTimeout = null;
+
+        /**
+         * Initializes the editor by loading saved text from localStorage.
+         */
+        function initEditor() {
+            try {
+                const savedContent = localStorage.getItem(STORAGE_KEY);
+                if (savedContent !== null) {
+                    editor.value = savedContent;
+                }
+            } catch (error) {
+                console.error('Could not load from localStorage:', error);
+                updateStatus('Storage unavailable', false);
+            }
+        }
+
+        /**
+         * Updates the subtle visual indicator in the top bar.
+         * @param {string} text - Status label
+         * @param {boolean} isSaved - Whether content is currently synced
+         */
+        function updateStatus(text, isSaved) {
+            statusText.textContent = text;
+            if (isSaved) {
+                statusDot.classList.remove('bg-amber-400');
+                statusDot.classList.add('bg-emerald-500/70');
+            } else {
+                statusDot.classList.remove('bg-emerald-500/70');
+                statusDot.classList.add('bg-amber-400');
+            }
+        }
+
+        /**
+         * Saves editor content to localStorage with a short debounce.
+         */
+        function handleInput() {
+            updateStatus('Saving...', false);
+            clearTimeout(saveTimeout);
+
+            saveTimeout = setTimeout(() => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, editor.value);
+                    updateStatus('Saved', true);
+                } catch (error) {
+                    console.error('Failed to save to localStorage:', error);
+                    updateStatus('Error saving', false);
+                }
+            }, 250);
+        }
+
+        /**
+         * Downloads the current text content as a plain .txt file.
+         */
+        function downloadText() {
+            const blob = new Blob([editor.value], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            // Generate a clean timestamped filename
+            const date = new Date().toISOString().slice(0, 10);
+            link.href = url;
+            link.download = `note-${date}.txt`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        /**
+         * Clears the editor and localStorage after custom inline confirmation.
+         */
+        function clearText() {
+            editor.value = '';
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+            } catch (error) {
+                console.error('Failed to clear localStorage:', error);
+            }
+            updateStatus('Saved', true);
+            confirmBar.classList.add('hidden');
+            editor.focus();
+        }
+
+        // Event Listeners
+        editor.addEventListener('input', handleInput);
+        downloadBtn.addEventListener('click', downloadText);
+
+        clearBtn.addEventListener('click', () => {
+            if (!editor.value.trim()) return; // Do nothing if already empty
+            confirmBar.classList.remove('hidden');
+        });
+
+        confirmYes.addEventListener('click', clearText);
+        confirmNo.addEventListener('click', () => {
+            confirmBar.classList.add('hidden');
+            editor.focus();
+        });
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', initEditor);
+    </script>
+</body>
+</html>
